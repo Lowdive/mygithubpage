@@ -1,0 +1,121 @@
+Option Explicit
+Function GetCPMX(Address As String) As String
+    
+    '-----------------------------------------------------------------------------------------------------
+    'This function returns the postal code of a given address using the Google Geocoding API.
+    'The function uses the "simplest" form of Google Geocoding API (sending only the address parameter, filtering for MX country results only),
+    'so, optional parameters such as bounds, language, region and components are not expected as inputs.
+    'In case of multiple results (for example two cities sharing the same name), the function
+    'returns the FIRST OCCURRENCE, so be careful in the input address (tip: use the city name and the
+    'postal code if they are available).
+    
+    'NOTE: As Google points out, the use of the Google Geocoding API is subject to a limit of 2500
+    'requests per day, so be careful not to exceed this limit. For more info check:
+    'https://developers.google.com/maps/documentation/geocoding/usage-limits
+        
+    'In order to use this function you must enable the XML, v3.0 library from VBA editor:
+    'Go to Tools -> References -> check the Microsoft XML, v3.0.
+    
+    '2018 Update: In order to use this function you will now need a valid API key.
+    'Check the next link that guides you on how to acquire a free API key:
+    'https://www.myengineeringworld.net/2018/02/how-to-get-free-google-api-key.html
+    
+    'This is a modfied version of an original function
+    
+    'Written By:    Christos Samaras
+    'Date:          12/06/2014
+    'Last Updated:  07/03/2018
+    'E-mail:        xristos.samaras@gmail.com
+    'Site:          https://www.myengineeringworld.net
+    
+    'Modified By:   José Elí Santiago Rodríguez
+    'Date:          17/12/2019
+    'Last Updated:  17/12/2019
+    'E-mail:        elisantiago.4e@gmail.com
+    'Site:          https://www.facebook.com/elisantiago
+    '-----------------------------------------------------------------------------------------------------
+    
+    'Declaring the necessary variables. Using 30 at the first two variables because it
+    'corresponds to the "Microsoft XML, v3.0" library in VBA (msxml3.dll).
+    Dim ApiKey          As String
+    Dim Request         As New XMLHTTP30
+    Dim Results         As New DOMDocument30
+    Dim StatusNode      As IXMLDOMNode
+
+    'Set your API key in this variable. Check this link for more info:
+    'https://www.myengineeringworld.net/2018/02/how-to-get-free-google-api-key.html
+    ApiKey = "<YOUR_KEY_GOES_HERE>"
+    
+    'Check that an API key has been provided.
+    If ApiKey = vbNullString Or ApiKey = "Your API Key goes here!" Then
+        GetCPMX = "Invalid API Key"
+        Exit Function
+    End If
+
+    'Generic error handling.
+    On Error GoTo errorHandler
+    
+    'Create the request based on Google Geocoding API. Parameters (from Google page):
+    '- Address: The address that you want to geocode.
+    '- Components: Indicates when you are using a component of the response to filter
+    '- Sensor: Indicates whether your application used a sensor to determine the user's location.
+    'This parameter is no longer required.
+    Request.Open "GET", "https://maps.googleapis.com/maps/api/geocode/xml?" _
+    & "&address=" & Address & "&components=country:MX&sensor=false&key=" & ApiKey, False
+    
+    'Send the request to the Google server.
+    Request.send
+    
+    'Read the results from the request.
+    Results.LoadXML Request.responseText
+    
+    'Get the status node value.
+    Set StatusNode = Results.SelectSingleNode("//status")
+    
+    'Based on the status node result, proceed accordingly.
+    Select Case UCase(StatusNode.Text)
+    
+        Case "OK"   'The API request was successful. At least one geocode was returned.
+            Dim n As IXMLDOMNode
+            Dim CPMEX As String
+            'get all the address components, check their types and save the text for the postal_code one
+            For Each n In Results.SelectNodes("//result/address_component")
+                If n.SelectSingleNode("type").Text = "postal_code" Then
+
+                CPMEX = n.SelectSingleNode("long_name").Text
+                Else
+                CPMEX = "Sin CP"
+                End If
+            Next
+            
+            'Return the postal code as string (postal code).
+            GetCPMX = CPMEX
+            
+        
+        Case "ZERO_RESULTS"   'The geocode was successful but returned no results.
+            GetCPMX = "The address probably not exists"
+            
+        Case "OVER_QUERY_LIMIT" 'The requestor has exceeded the limit of 2500 request/day.
+            GetCPMX = "Requestor has exceeded the server limit"
+            
+        Case "REQUEST_DENIED"   'The API did not complete the request.
+            GetCPMX = "Server denied the request"
+            
+        Case "INVALID_REQUEST"  'The API request is empty or is malformed.
+            GetCPMX = "Request was empty or malformed"
+        
+        Case "UNKNOWN_ERROR"    'Indicates that the request could not be processed due to a server error.
+            GetCPMX = "Unknown error"
+        
+        Case Else   'Just in case...
+            GetCPMX = "Error"
+        
+    End Select
+        
+    'In case of error, release the objects.
+errorHandler:
+    Set StatusNode = Nothing
+    Set Results = Nothing
+    Set Request = Nothing
+    
+End Function
